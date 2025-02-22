@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批量检测账号有效性</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        button {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .results {
+            margin-top: 30px;
+        }
+
+        .results h2 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .results-content {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            font-size: 14px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        #validResults {
+            border-left: 4px solid #2ecc71;
+            white-space: pre-wrap;
+        }
+
+        #zeroBalanceResults {
+            border-left: 4px solid #f1c40f;
+            white-space: pre-wrap;
+        }
+
+        #invalidResults {
+            border-left: 4px solid #e74c3c;
+        }
+
+        .invalid-token {
+            background-color: #ffecec;
+            padding: 12px;
+            margin-bottom: 12px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .invalid-token-content {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .invalid-token-token {
+            font-family: monospace;
+            background-color: #fff;
+            padding: 6px;
+            border-radius: 3px;
+            margin-bottom: 6px;
+            border: 1px solid #ffcccb;
+            word-break: break-all;
+        }
+
+        .invalid-token-message {
+            color: #c0392b;
+            font-weight: bold;
+        }
+
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .copy-button {
+            background-color: #27ae60;
+            margin-top: 10px;
+        }
+
+        .copy-button.zero-balance {
+            background-color: #f39c12;
+        }
+
+        .copy-button:hover {
+            background-color: #2ecc71;
+        }
+
+        .copy-button.zero-balance:hover {
+            background-color: #f1c40f;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .button-group .copy-button {
+            flex: 1;
+            margin-top: 0;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>硅基流动Token有效性检测</h1>
+        <div style="margin-bottom: 20px;">
+            <label for="balanceThreshold" style="display: block; margin-bottom: 8px;">最低余额阈值：</label>
+            <input type="number" id="balanceThreshold" value="0.5" min="0" step="0.1"
+                style="padding: 8px; border: 1px solid #ddd; border-radius: 4px; width: 120px;">
+        </div>
+        <textarea id="tokens" placeholder="请输入sk token，支持每行一个或用逗号分隔"></textarea>
+        <button id="checkButton" onclick="checkTokens()">检测账号</button>
+        <div class="results">
+            <h2>有余额账号</h2>
+            <div id="validResults" class="results-content"></div>
+            <div class="button-group">
+                <button id="copyButton" class="copy-button" onclick="copyTokens('valid')"
+                    style="display: none;">复制有余额账号</button>
+                <button id="copyCommaButton" class="copy-button" onclick="copyTokensWithComma('valid')"
+                    style="display: none;">复制有余额账号(逗号连接)</button>
+            </div>
+
+            <h2>零余额账号</h2>
+            <div id="zeroBalanceResults" class="results-content"></div>
+            <div class="button-group">
+                <button id="copyZeroButton" class="copy-button zero-balance" onclick="copyTokens('zero')"
+                    style="display: none;">复制零余额账号</button>
+                <button id="copyZeroCommaButton" class="copy-button zero-balance" onclick="copyTokensWithComma('zero')"
+                    style="display: none;">复制零余额账号(逗号连接)</button>
+            </div>
+
+            <h2>失效账号</h2>
+            <div id="invalidResults" class="results-content"></div>
+
+            <h2>重复账号</h2>
+            <div id="duplicateResults" class="results-content" style="border-left: 4px solid #9b59b6;"></div>
+        </div>
+    </div>
+
+    <script>
+        async function checkTokens() {
+            const tokensTextarea = document.getElementById('tokens');
+            const checkButton = document.getElementById('checkButton');
+            const validResults = document.getElementById('validResults');
+            const zeroBalanceResults = document.getElementById('zeroBalanceResults');
+            const invalidResults = document.getElementById('invalidResults');
+            const duplicateResults = document.getElementById('duplicateResults');
+            const copyButton = document.getElementById('copyButton');
+            const copyZeroButton = document.getElementById('copyZeroButton');
+            const copyCommaButton = document.getElementById('copyCommaButton');
+            const copyZeroCommaButton = document.getElementById('copyZeroCommaButton');
+
+            const inputText = tokensTextarea.value.trim();
+            let tokens = [];
+            let tokenCount = new Map();
+            let duplicateTokens = new Set();
+
+            // 先将输入按换行符分割，处理每一行
+            const lines = inputText.split('\n');
+
+            // 处理每一行，如果行内有逗号则按逗号分割，同时记录token出现次数
+            lines.forEach(line => {
+                const trimmedLine = line.trim();
+                if (trimmedLine) {
+                    const lineTokens = trimmedLine.split(',')
+                        .map(t => t.trim())
+                        .filter(t => t !== '');
+                    lineTokens.forEach(token => {
+                        tokenCount.set(token, (tokenCount.get(token) || 0) + 1);
+                        if (tokenCount.get(token) > 1) {
+                            duplicateTokens.add(token);
+                        }
+                    });
+                    tokens = tokens.concat(lineTokens);
+                }
+            });
+
+            // 移除重复的token，只保留一个
+            tokens = [...new Set(tokens)].filter(token => token !== '');
+
+            if (tokens.length === 0) {
+                alert('请输入至少一个token');
+                return;
+            }
+
+            // 显示重复的tokens
+            duplicateResults.textContent = duplicateTokens.size > 0
+                ? `发现 ${duplicateTokens.size} 个重复token：\n${[...duplicateTokens].join('\n')}，已处理。`
+                : '没有发现重复的token';
+
+            checkButton.disabled = true;
+            checkButton.innerHTML = '<span class="loader"></span>检测中...';
+            validResults.textContent = '';
+            zeroBalanceResults.textContent = '';
+            invalidResults.innerHTML = '';
+            copyButton.style.display = 'none';
+            copyZeroButton.style.display = 'none';
+            copyCommaButton.style.display = 'none';
+            copyZeroCommaButton.style.display = 'none';
+
+            const results = await Promise.all(tokens.map(checkToken));
+
+            const validTokens = [];
+            const zeroBalanceTokens = [];
+            const invalidTokens = [];
+
+            results.forEach(result => {
+                if (!result.isValid) {
+                    if (result.message === 'Sorry, your account balance is insufficient') {
+                        zeroBalanceTokens.push(`${result.token} (余额: 0)`);
+                    } else {
+                        invalidTokens.push(result);
+                    }
+                } else {
+                    const balance = parseFloat(result.balance);
+                    const threshold = parseFloat(document.getElementById('balanceThreshold').value) || 0;
+                    if (balance >= threshold) {
+                        validTokens.push({
+                            token: result.token,
+                            balance: balance
+                        });
+                    } else {
+                        zeroBalanceTokens.push(`${result.token} (余额: ${result.balance})`);
+                    }
+                }
+            });
+
+            // 对有余额的账号进行排序（从大到小）
+            validTokens.sort((a, b) => b.balance - a.balance);
+            // 转换为显示格式
+            validResults.textContent = validTokens.map(item => `${item.token} (余额: ${item.balance})`).join('\n');
+            zeroBalanceResults.textContent = zeroBalanceTokens.join('\n');
+
+            invalidTokens.forEach(result => {
+                const div = document.createElement('div');
+                div.className = 'invalid-token';
+                div.innerHTML = `
+                    <div class="invalid-token-content">
+                        <div class="invalid-token-token">${result.token}</div>
+                        <div class="invalid-token-message">${result.message}</div>
+                    </div>
+                `;
+                invalidResults.appendChild(div);
+            });
+
+            if (validTokens.length > 0) {
+                copyButton.style.display = 'block';
+                copyCommaButton.style.display = 'block';
+            }
+            if (zeroBalanceTokens.length > 0) {
+                copyZeroButton.style.display = 'block';
+                copyZeroCommaButton.style.display = 'block';
+            }
+
+            checkButton.disabled = false;
+            checkButton.textContent = '检测账号';
+        }
+
+        async function checkToken(token) {
+            try {
+                const response = await fetch('https://api.siliconflow.cn/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) CherryStudio/0.8.7 Chrome/120.0.6099.291 Electron/28.3.3 Safari/537.36',
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json',
+                        'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120"',
+                        'x-stainless-os': 'Unknown',
+                        'x-stainless-lang': 'js',
+                        'sec-ch-ua-mobile': '?0',
+                        'x-stainless-package-version': '4.59.0',
+                        'x-stainless-runtime': 'browser:chrome',
+                        'x-stainless-arch': 'unknown',
+                        'x-stainless-runtime-version': '120.0.6099',
+                        'x-api-key': token,
+                        'sec-ch-ua-platform': 'macOS',
+                        'Sec-Fetch-Site': 'cross-site',
+                        'Sec-Fetch-Mode': 'cors',
+                        'Sec-Fetch-Dest': 'empty',
+                        'Accept-Language': 'zh-CN'
+                    },
+                    body: JSON.stringify({
+                        "model": "Qwen/Qwen2.5-72B-Instruct",
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": "hi"
+                            }
+                        ],
+                        "max_tokens": 100,
+                        "stream": false
+                    })
+                });
+
+                if (response.ok) {
+                    const balanceResponse = await fetch('https://api.siliconflow.cn/v1/user/info', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+                    const balanceData = await balanceResponse.json();
+                    const balance = balanceData.data.totalBalance;
+                    return { token, isValid: true, balance };
+                } else {
+                    const errorData = await response.json();
+                    return { token, isValid: false, message: errorData.message };
+                }
+            } catch (error) {
+                return { token, isValid: false, message: `请求失败: ${error.message}` };
+            }
+        }
+
+        function copyTokens(type) {
+            const resultsDiv = type === 'valid' ? document.getElementById('validResults') : document.getElementById('zeroBalanceResults');
+            const tokens = resultsDiv.textContent.split('\n').map(line => line.split(' ')[0]);
+            const textArea = document.createElement('textarea');
+            textArea.value = tokens.join('\n');
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            alert(type === 'valid' ? '有余额账号已复制到剪贴板' : '零余额账号已复制到剪贴板');
+        }
+
+        function copyTokensWithComma(type) {
+            const resultsDiv = type === 'valid' ? document.getElementById('validResults') : document.getElementById('zeroBalanceResults');
+            const tokens = resultsDiv.textContent.split('\n').map(line => line.split(' ')[0]);
+            const textArea = document.createElement('textarea');
+            textArea.value = tokens.join(',');
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            alert(type === 'valid' ? '有余额账号已复制到剪贴板(逗号连接)' : '零余额账号已复制到剪贴板(逗号连接)');
+        }
+    </script>
+</body>
+
+</html>
